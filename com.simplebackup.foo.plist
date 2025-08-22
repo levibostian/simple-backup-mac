@@ -6,9 +6,7 @@
         <string>com.simplebackup.foo</string>
         <key>ProgramArguments</key>
         <array>
-                <string>sh</string>
-                <string>-c</string>
-                <string>~/backup.sh</string>
+                <string>/Users/foo/backup.sh</string>
         </array>
         <key>StartCalendarInterval</key>
         <dict>
@@ -17,5 +15,9 @@
                 <key>Minute</key>
                 <integer>00</integer>
         </dict>
+        <key>StandardOutPath</key>
+        <string>/Users/foo/Library/Logs/com.simplebackup.foo_out.log</string>
+        <key>StandardErrorPath</key>
+        <string>/Users/foo/Library/Logs/com.simplebackup.foo_err.log</string>
 </dict>
 </plist>
