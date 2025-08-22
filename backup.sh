@@ -67,6 +67,19 @@ trap cleanup EXIT
 # Git Operations
 # =============================================================================
 
+# Helper function to run git commands with logging
+run_git() {
+    log_info "$> git $*"
+    
+    if git "$@"; then
+        return 0
+    else
+        local exit_code=$?
+        log_error "Git command failed (exit code $exit_code): git $*"
+        return $exit_code
+    fi
+}
+
 check_git_repo() {
     if ! git rev-parse --git-dir > /dev/null 2>&1; then
         log_error "Not a git repository: $SCRIPT_DIR"
@@ -86,7 +99,7 @@ check_remote() {
 
 fetch_latest() {
     log_info "Fetching latest changes from remote..."
-    if ! git fetch origin; then
+    if ! run_git fetch origin; then
         log_error "Failed to fetch from remote"
         exit 1
     fi
@@ -95,7 +108,7 @@ fetch_latest() {
 
 stage_changes() {
     log_info "Staging all changes..."
-    if ! git add -A; then
+    if ! run_git add -A; then
         log_error "Failed to stage changes"
         exit 1
     fi
@@ -114,7 +127,7 @@ create_commit() {
     local commit_message="Backup: $(date '+%Y-%m-%d %H:%M:%S')"
     log_info "Creating commit with message: $commit_message"
     
-    if ! git commit -m "$commit_message"; then
+    if ! run_git commit -m "$commit_message"; then
         log_error "Failed to create commit"
         exit 1
     fi
@@ -128,20 +141,20 @@ push_changes() {
     log_info "Pushing changes to remote branch: $current_branch"
     
     # Try to push first
-    if git push -u origin "$current_branch"; then
+    if run_git push -u origin "$current_branch"; then
         log_info "Successfully pushed changes to remote"
         return 0
     fi
     
     # If push failed, likely due to remote changes, pull first
     log_info "Push failed, pulling remote changes first..."
-    if ! git pull --no-edit origin "$current_branch"; then
+    if ! run_git pull --no-edit origin "$current_branch"; then
         log_error "Failed to pull remote changes"
         exit 1
     fi
     
     log_info "Pull completed, attempting push again..."
-    if ! git push -u origin "$current_branch"; then
+    if ! run_git push -u origin "$current_branch"; then
         log_error "Failed to push changes after pull"
         exit 1
     fi
