@@ -93,16 +93,6 @@ fetch_latest() {
     log_info "Fetch completed successfully"
 }
 
-check_for_changes() {
-    # Check if there are any unstaged changes
-    if git diff --quiet && git diff --cached --quiet; then
-        log_info "No changes detected in repository"
-        return 1
-    fi
-    log_info "Changes detected in repository"
-    return 0
-}
-
 stage_changes() {
     log_info "Staging all changes..."
     if ! git add -A; then
@@ -133,65 +123,30 @@ create_commit() {
     log_info "Commit created successfully: $commit_hash"
 }
 
-sync_with_remote() {
-    local current_branch=$(git branch --show-current)
-    log_info "Current branch: $current_branch"
-    
-    # Check if remote branch exists
-    if git show-ref --verify --quiet "refs/remotes/origin/$current_branch"; then
-        log_info "Remote branch exists, checking for conflicts..."
-        
-        # Check if we're behind the remote
-        local local_commit=$(git rev-parse HEAD)
-        local remote_commit=$(git rev-parse "origin/$current_branch")
-        
-        if [ "$local_commit" != "$remote_commit" ]; then
-            log_info "Local and remote branches have diverged, attempting merge..."
-            
-            # Try to merge remote changes
-            if ! git merge "origin/$current_branch" --no-edit; then
-                log_error "Merge failed, attempting to resolve..."
-                
-                # Check if it's a merge conflict
-                if git status --porcelain | grep -q "^UU\|^AA\|^DD"; then
-                    log_warn "Merge conflicts detected, resolving automatically..."
-                    
-                    # For backup purposes, we'll favor our local changes
-                    git checkout --ours .
-                    git add -A
-                    
-                    if ! git commit --no-edit; then
-                        log_error "Failed to resolve merge conflicts"
-                        exit 1
-                    fi
-                    
-                    log_info "Merge conflicts resolved automatically"
-                else
-                    log_error "Merge failed for unknown reason"
-                    exit 1
-                fi
-            else
-                log_info "Merge completed successfully"
-            fi
-        else
-            log_info "Local and remote are in sync"
-        fi
-    else
-        log_info "Remote branch does not exist, will be created on push"
-    fi
-}
-
 push_changes() {
     local current_branch=$(git branch --show-current)
     log_info "Pushing changes to remote branch: $current_branch"
     
-    # Push with upstream setting in case branch doesn't exist remotely
-    if ! git push -u origin "$current_branch"; then
-        log_error "Failed to push changes"
+    # Try to push first
+    if git push -u origin "$current_branch"; then
+        log_info "Successfully pushed changes to remote"
+        return 0
+    fi
+    
+    # If push failed, likely due to remote changes, pull first
+    log_info "Push failed, pulling remote changes first..."
+    if ! git pull --no-edit origin "$current_branch"; then
+        log_error "Failed to pull remote changes"
         exit 1
     fi
     
-    log_info "Successfully pushed changes to remote"
+    log_info "Pull completed, attempting push again..."
+    if ! git push -u origin "$current_branch"; then
+        log_error "Failed to push changes after pull"
+        exit 1
+    fi
+    
+    log_info "Successfully pushed changes to remote after pull"
 }
 
 # =============================================================================
@@ -218,13 +173,7 @@ main() {
     # Fetch latest changes from remote
     fetch_latest
     
-    # Check for local changes
-    if ! check_for_changes; then
-        log_info "No changes to backup, exiting early"
-        exit 0
-    fi
-    
-    # Stage all changes
+    # Stage all changes (tracked and untracked files)
     if ! stage_changes; then
         log_info "No changes to commit after staging, exiting early"
         exit 0
@@ -233,10 +182,7 @@ main() {
     # Create commit
     create_commit
     
-    # Sync with remote (handle merges)
-    sync_with_remote
-    
-    # Push changes
+    # Push changes (will pull first if needed)
     push_changes
     
     log_info "=== Git Backup Script Completed Successfully ==="
